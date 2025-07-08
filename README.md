@@ -10,4 +10,4 @@ Python GUI Apps made using Tkinter
 
 ## Notes
 
-Tkinter is part of Python standrad library
+Tkinter is part of Python standard library

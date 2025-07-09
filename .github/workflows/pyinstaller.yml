@@ -1,0 +1,47 @@
+
+name: Manual Pyinstaller [Windows]
+
+# Builds using Pyinstaller
+
+on:
+  workflow_dispatch:
+    # Inputs the workflow accepts.
+    inputs:
+      pyfile:
+        description: 'Target Python File'
+        required: true
+        type: string
+      pip-install:
+        description: 'Modules to install'
+        required: false
+        type: string
+
+jobs:
+  pyinstaller-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install ${{ github.event.inputs.pip-install }}
+      - name: Create Executable
+        uses: sayyid5416/pyinstaller@v1
+        with:
+          python_ver: '3.10'
+          #pyinstaller_ver: '==5.13.2'
+          spec: "${{ github.event.inputs.pyfile }}"
+          #requirements: 'requirements.txt'
+          #upload_exe_with_name: 'My executable'
+          options: --onefile, --windowed  # --name "My App",
+          #spec_options: # any custom arguments you want like: `--debug`
+
+      - name: Upload Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: executable-windows
+          path: dist/*
+      

@@ -18,18 +18,10 @@ on:
 
 jobs:
   pyinstaller-build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]  # , macos-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Install gettext (fix for macOS Python)
-        if: runner.os == 'macOS'
-        run: |
-          brew install gettext
-          brew link --force gettext
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -50,6 +42,6 @@ jobs:
       - name: Upload Executable
         uses: actions/upload-artifact@v4
         with:
-          name: executable-${{ matrix.os }}-${{ github.run_id }}
+          name: executable-windows
           path: dist/*
       

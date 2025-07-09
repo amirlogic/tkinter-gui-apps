@@ -27,6 +27,7 @@ jobs:
       - name: Install gettext (fix for macOS Python)
         run: |
           brew install gettext
+          brew unlink gettext
           brew link --force gettext
       - name: Set up Python
         uses: actions/setup-python@v5

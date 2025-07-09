@@ -18,7 +18,11 @@ on:
 
 jobs:
   pyinstaller-build:
-    runs-on: windows-latest #ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    #runs-on: windows-latest #ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,6 +42,6 @@ jobs:
       - name: Upload Executable
         uses: actions/upload-artifact@v4
         with:
-          name: windows-executable
+          name: executable
           path: dist/*
       

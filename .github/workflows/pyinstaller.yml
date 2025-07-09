@@ -26,15 +26,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Install gettext (fix for macOS Python)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gettext
+          brew link --force gettext
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Install dependencies
         run: pip install ${{ github.event.inputs.pip-install }}
-      - name: Install gettext (fix for macOS Python)
-        if: runner.os == 'macOS'
-        run: brew install gettext
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:

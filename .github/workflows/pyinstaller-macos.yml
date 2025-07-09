@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Uninstall gettext
+        run: brew uninstall gettext
       - name: Install gettext (fix for macOS Python)
         run: |
           brew install gettext

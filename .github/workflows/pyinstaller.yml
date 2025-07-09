@@ -16,7 +16,20 @@ on:
         required: true
         type: string
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  pyinstaller-build:
+    runs-on: windows-latest #ubuntu-latest
+    steps:
+      - name: Create Executable
+        uses: sayyid5416/pyinstaller@v1
+        with:
+          python_ver: '3.9'
+          #pyinstaller_ver: '==5.13.2'
+          #spec: 'src/build.spec'
+          #requirements: 'src/requirements.txt'
+          #upload_exe_with_name: 'My executable'
+          options: --onefile, --windowed  # --name "My App",
+          #spec_options: # any custom arguments you want like: `--debug`
+
   
        #run: echo "Hello ${{ inputs.name }}"

@@ -23,7 +23,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Uninstall gettext
-        run: brew uninstall gettext
+        run: brew uninstall --ignore-dependencies gettext
       - name: Install gettext (fix for macOS Python)
         run: |
           brew install gettext

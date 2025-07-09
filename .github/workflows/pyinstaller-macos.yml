@@ -40,7 +40,7 @@ jobs:
           spec: "${{ github.event.inputs.pyfile }}"
           #requirements: 'requirements.txt'
           #upload_exe_with_name: 'My executable'
-          options: --onefile, --windowed  # --name "My App",
+          options: --onefile #, --windowed  # --name "My App",
           #spec_options: # any custom arguments you want like: `--debug`
 
       - name: Upload Executable

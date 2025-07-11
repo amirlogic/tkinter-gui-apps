@@ -11,7 +11,7 @@ class CodeAnimator(tk.Tk):
         self.title("Python Syntax Highlighting Animator")
         self.geometry("800x600")
 
-        self.text = tk.Text(self, font=("DejaVu Sans Mono", 14), bg="#1e1e1e", fg="#ffffff", insertbackground='white', padx=20, pady=20)
+        self.text = tk.Text(self, font=("DejaVu Sans Mono", 14), bg="#000000", fg="#ffffff", insertbackground='white', padx=20, pady=20)
         self.text.pack(expand=True, fill="both")
         self.text.config(state="disabled")
 

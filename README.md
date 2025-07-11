@@ -8,6 +8,11 @@ Python GUI Apps made using Tkinter
 `embwalk.py`  Select files in a directory to be embedded in a PDF document
 
 
+## Misc
+
+`codeanim.py`  Python Code Animator with Syntax Highlighting
+
+
 ## Notes
 
 Tkinter is part of Python standard library

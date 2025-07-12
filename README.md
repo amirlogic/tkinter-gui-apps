@@ -8,6 +8,11 @@ Python GUI Apps made using Tkinter
 `embwalk.py`  Select files in a directory to be embedded in a PDF document
 
 
+## FFMPEG / ImageMagic Frontends
+
+`gifmaker.py`  Create GIF from video (requires FFMPEG)
+
+
 ## Misc
 
 `codeanim.py`  Python Code Animator with Syntax Highlighting

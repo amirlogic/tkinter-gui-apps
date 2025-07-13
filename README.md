@@ -7,6 +7,8 @@ Python GUI Apps made using Tkinter
 
 `embwalk.py`  Select files in a directory to be embedded in a PDF document
 
+`pdfrect.py`  Visualize a Rectangle on a PDF document
+
 
 ## FFMPEG / ImageMagic Frontends
 

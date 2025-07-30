@@ -16,6 +16,8 @@ Python GUI Apps made using Tkinter
 
 `gifmaker.py`  Create GIF from video (requires FFMPEG)
 
+`videotrim.py`  Removes chunks from video (requires FFMPEG)
+
 
 ## Misc
 

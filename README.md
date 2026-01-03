@@ -18,6 +18,8 @@ Python GUI Apps made using Tkinter
 
 `videotrim.py`  Removes chunks from video (requires FFMPEG)
 
+`imgtovideo.py` Zoom on Image in Video (requires FFMPEG)
+
 
 ## Misc
 

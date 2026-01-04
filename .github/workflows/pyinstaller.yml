@@ -29,6 +29,10 @@ jobs:
       - name: Install dependencies
         if: ${{ github.event.inputs.pip-install != '' }}
         run: pip install ${{ github.event.inputs.pip-install }}
+      - name: Install Pylint
+        run: pip install pylint
+      - name: Run pylint
+        run: "pylint --disable=C,R,W ${{ github.event.inputs.pyfile }}"
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:

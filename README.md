@@ -20,6 +20,8 @@ Python GUI Apps made using Tkinter
 
 `imgtovideo.py` Zoom on Image in Video (requires FFMPEG)
 
+`videocrop.py` Crops a Video (requires FFMPEG)
+
 
 ## Misc
 

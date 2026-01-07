@@ -30,6 +30,20 @@ Python GUI Apps made using Tkinter
 `textweb.py`  Get Text Only version of a Website (requires bs4)
 
 
+## Usage
+
+### As Python Script
+
+Clone the repo then run: `python <script.py>`
+
+
+### Make Executable
+
+On your machine: Clone the repo then use Pyinstaller to build
+
+GitHub Actions: Fork this repo then run ready-to-use actions to build (Recommended)
+
+
 ## Notes
 
 Tkinter is part of Python standard library

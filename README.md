@@ -22,6 +22,8 @@ Python GUI Apps made using Tkinter
 
 `videocrop.py` Crops a Video (requires FFMPEG)
 
+`videoscene.py` Detect and List Scenes in a Video (requires FFMPEG)
+
 
 ## Misc
 

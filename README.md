@@ -25,6 +25,11 @@ Python GUI Apps made using Tkinter
 `videoscene.py` Detect and List Scenes in a Video (requires FFMPEG)
 
 
+## Windows
+
+`schtasks-gui.py` Schtasks View - Delete - Create
+
+
 ## Misc
 
 `codeanim.py`  Python Code Animator with Syntax Highlighting

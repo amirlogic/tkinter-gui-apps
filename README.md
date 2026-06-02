@@ -36,6 +36,8 @@ Python GUI Apps made using Tkinter
 
 `textweb.py`  Get Text Only version of a Website (requires bs4)
 
+`tauriman.py`  Tauri v2 Manager
+
 
 ## Usage
 

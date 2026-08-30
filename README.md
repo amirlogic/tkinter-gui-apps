@@ -50,7 +50,7 @@ Clone the repo then run: `python <script.py>`
 
 ### Make Executable
 
-On your machine: Clone the repo then use Pyinstaller to build
+On your machine: Clone the repo then use Pyinstaller to build (use 'pyinst.py')
 
 GitHub Actions: Fork this repo then run ready-to-use actions to build (Recommended)
 

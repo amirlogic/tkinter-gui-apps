@@ -40,6 +40,8 @@ Python GUI Apps made using Tkinter
 
 `tauriman.py`  Tauri v2 Manager
 
+`tauri_sync_app.py`  Tauri Plugin Version Synchronizer
+
 
 ## Usage
 

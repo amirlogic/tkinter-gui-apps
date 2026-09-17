@@ -1,3 +1,3 @@
 # Screenshots
 
-![pyinst.py](/pyinst.png)
+![pyinst.PNG](./pyinst.PNG)

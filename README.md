@@ -32,15 +32,18 @@ Python GUI Apps made using Tkinter
 `webapps.py`  Local http servers manager
 
 
+## Tauri
+
+`tauriman.py`  Tauri v2 Manager
+
+`tauri_sync_app.py`  Tauri Plugin Version Synchronizer
+
+
 ## Misc
 
 `codeanim.py`  Python Code Animator with Syntax Highlighting
 
 `textweb.py`  Get Text Only version of a Website (requires bs4)
-
-`tauriman.py`  Tauri v2 Manager
-
-`tauri_sync_app.py`  Tauri Plugin Version Synchronizer
 
 
 ## Usage

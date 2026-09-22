@@ -1,6 +1,10 @@
 import os
 import re
 import json
+import time
+import sys
+import platform
+import urllib.request
 import subprocess
 import threading
 import tkinter as tk
@@ -10,11 +14,19 @@ class TauriManagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Tauri v2 Project Manager")
-        self.root.geometry("850x650")
+        self.root.geometry("850x700")
         self.root.minsize(700, 500)
 
         self.project_dir = tk.StringVar(value=os.getcwd())
         self.package_manager = "pnpm"
+        self.source_icon_path = tk.StringVar(value="")
+
+        # Watcher variables
+        self.watch_enabled = tk.BooleanVar(value=False)
+        self.watcher_thread = None
+        self.watcher_running = False
+        self.file_mtimes = {}
+        self.debounce_timer = None
 
         self.create_layout()
         self.refresh_project_context()
@@ -25,11 +37,15 @@ class TauriManagerApp:
         top_frame.pack(fill=tk.X)
 
         ttk.Label(top_frame, text="Project Directory:").pack(side=tk.LEFT, padx=5)
-        self.dir_entry = ttk.Entry(top_frame, textvariable=self.project_dir, width=50)
+        self.dir_entry = ttk.Entry(top_frame, textvariable=self.project_dir, width=40)
         self.dir_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         
         browse_btn = ttk.Button(top_frame, text="Browse...", command=self.browse_directory)
         browse_btn.pack(side=tk.LEFT, padx=5)
+
+        # Launch Dev Server Button
+        dev_btn = ttk.Button(top_frame, text="🚀 Launch Tauri Dev", command=self.launch_tauri_dev)
+        dev_btn.pack(side=tk.RIGHT, padx=5)
 
         # --- Info Bar ---
         self.info_label = ttk.Label(self.root, text="Package Manager Detected: None", font=("Arial", 10, "italic"))
@@ -43,6 +59,9 @@ class TauriManagerApp:
         self.setup_plugins_tab()
         self.setup_config_tab()
         self.setup_cargo_tab()
+        self.setup_icons_tab()
+        self.setup_check_tab()
+        self.setup_update_tab()
 
     # --------------------------------------------------------
     # TAB 1: PLUGINS
@@ -51,36 +70,46 @@ class TauriManagerApp:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Plugins")
 
-        # Top splitting layout
         top_paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
         top_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Left panel: Installed list
+        # Left Panel: Treeview of Plugins
         left_frame = ttk.LabelFrame(top_paned, text="Installed Plugins", padding=10)
-        top_paned.add(left_frame, weight=1)
+        top_paned.add(left_frame, weight=3)
 
-        self.plugins_listbox = tk.Listbox(left_frame, height=8)
-        self.plugins_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        # Setup Treeview table with versions
+        columns = ("name", "current", "latest")
+        self.plugins_tree = ttk.Treeview(left_frame, columns=columns, show="headings", height=8)
+        self.plugins_tree.heading("name", text="Plugin")
+        self.plugins_tree.heading("current", text="Current Version")
+        self.plugins_tree.heading("latest", text="Latest Registry")
         
-        list_scroll = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.plugins_listbox.yview)
-        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.plugins_listbox.config(yscrollcommand=list_scroll.set)
+        self.plugins_tree.column("name", width=180, anchor=tk.W)
+        self.plugins_tree.column("current", width=110, anchor=tk.CENTER)
+        self.plugins_tree.column("latest", width=110, anchor=tk.CENTER)
+        self.plugins_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
-        # Right panel: Installation Tools
-        right_frame = ttk.LabelFrame(top_paned, text="Install New Plugin", padding=10)
-        top_paned.add(right_frame, weight=1)
+        tree_scroll = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.plugins_tree.yview)
+        tree_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.plugins_tree.config(yscrollcommand=tree_scroll.set)
+
+        # Right Panel: Installation and Actions
+        right_frame = ttk.LabelFrame(top_paned, text="Manage Plugins", padding=10)
+        top_paned.add(right_frame, weight=2)
 
         ttk.Label(right_frame, text="Plugin Name (e.g., store, notification):").pack(anchor=tk.W, pady=2)
         self.plugin_name_entry = ttk.Entry(right_frame)
         self.plugin_name_entry.pack(fill=tk.X, pady=5)
 
         install_btn = ttk.Button(right_frame, text="Install Plugin", command=self.install_plugin)
-        install_btn.pack(anchor=tk.E, pady=5)
+        install_btn.pack(fill=tk.X, pady=3)
 
-        refresh_btn = ttk.Button(right_frame, text="Scan / Refresh List", command=self.scan_installed_plugins)
-        refresh_btn.pack(anchor=tk.E, pady=5)
+        update_plugin_btn = ttk.Button(right_frame, text="Update Selected Plugin", command=self.update_selected_plugin)
+        update_plugin_btn.pack(fill=tk.X, pady=3)
 
-        # Bottom Frame: Terminal Output
+        refresh_btn = ttk.Button(right_frame, text="Scan / Refresh Versions", command=self.scan_installed_plugins)
+        refresh_btn.pack(fill=tk.X, pady=3)
+
         output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
         output_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -123,8 +152,8 @@ class TauriManagerApp:
         clean_btn = ttk.Button(btn_frame, text="Cargo Clean", command=lambda: self.run_cargo_command("cargo clean"))
         clean_btn.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
 
-        upgrade_btn = ttk.Button(btn_frame, text="Cargo Upgrade", command=lambda: self.run_cargo_command("cargo upgrade"))
-        upgrade_btn.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
+        update_btn = ttk.Button(btn_frame, text="Cargo Update", command=lambda: self.run_cargo_command("cargo update"))
+        update_btn.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
 
         output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
         output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -132,6 +161,192 @@ class TauriManagerApp:
         self.cargo_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
         self.cargo_output.pack(fill=tk.BOTH, expand=True)
         self.cargo_output.configure(state='disabled')
+
+    # --------------------------------------------------------
+    # TAB 4: ICONS
+    # --------------------------------------------------------
+    def setup_icons_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Icons")
+
+        input_frame = ttk.LabelFrame(tab, text="Generate App Icons", padding=10)
+        input_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Label(input_frame, text="Source Image (PNG 1024x1024 recommended):").pack(anchor=tk.W, pady=2)
+        
+        file_select_frame = ttk.Frame(input_frame)
+        file_select_frame.pack(fill=tk.X, pady=5)
+
+        icon_entry = ttk.Entry(file_select_frame, textvariable=self.source_icon_path)
+        icon_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        browse_icon_btn = ttk.Button(file_select_frame, text="Browse...", command=self.browse_icon_file)
+        browse_icon_btn.pack(side=tk.LEFT)
+
+        generate_btn = ttk.Button(input_frame, text="Generate Icons", command=self.generate_icons)
+        generate_btn.pack(anchor=tk.E, pady=10)
+
+        output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.icons_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
+        self.icons_output.pack(fill=tk.BOTH, expand=True)
+        self.icons_output.configure(state='disabled')
+
+    def browse_icon_file(self):
+        selected = filedialog.askopenfilename(
+            initialdir=self.project_dir.get(),
+            title="Select Source Image",
+            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.svg"), ("All Files", "*.*")]
+        )
+        if selected:
+            self.source_icon_path.set(selected)
+
+    def generate_icons(self):
+        icon_path = self.source_icon_path.get().strip()
+        if not icon_path or not os.path.exists(icon_path):
+            messagebox.showwarning("Warning", "Please select a valid source image file.")
+            return
+
+        run_cmd = "run " if self.package_manager in ["npm", "pnpm"] else ""
+        command = f"{self.package_manager} {run_cmd}tauri icon \"{icon_path}\""
+
+        self.log_to_widget(self.icons_output, f"\n> Executing: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.icons_output), daemon=True).start()
+
+    # --------------------------------------------------------
+    # TAB 5: CHECK
+    # --------------------------------------------------------
+    def setup_check_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Check")
+
+        top_controls = ttk.Frame(tab, padding=10)
+        top_controls.pack(fill=tk.X)
+
+        run_check_btn = ttk.Button(top_controls, text="Run node --check on /src", command=self.run_node_check)
+        run_check_btn.pack(side=tk.LEFT, padx=5)
+
+        watch_chk = ttk.Checkbutton(
+            top_controls, 
+            text="Watch /src for changes", 
+            variable=self.watch_enabled, 
+            command=self.toggle_watcher
+        )
+        watch_chk.pack(side=tk.LEFT, padx=15)
+
+        output_frame = ttk.LabelFrame(tab, text="Syntax Check Output", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.check_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
+        self.check_output.pack(fill=tk.BOTH, expand=True)
+        self.check_output.configure(state='disabled')
+
+    def get_src_files(self):
+        src_path = os.path.join(self.project_dir.get(), "src")
+        target_extensions = ('.js', '.jsx', '.ts', '.tsx')
+        valid_files = []
+
+        if not os.path.exists(src_path):
+            return valid_files
+
+        for root, _, files in os.walk(src_path):
+            for file in files:
+                if file.endswith(target_extensions):
+                    valid_files.append(os.path.join(root, file))
+        return valid_files
+
+    def run_node_check(self, target_files=None):
+        if target_files is None:
+            files_to_check = self.get_src_files()
+        else:
+            files_to_check = target_files
+
+        if not files_to_check:
+            self.log_to_widget(self.check_output, "\n[Check] No JS/TS files found in /src directory.\n")
+            return
+
+        def task():
+            self.log_to_widget(self.check_output, f"\n> Checking {len(files_to_check)} file(s)...\n")
+            for file_path in files_to_check:
+                rel_path = os.path.relpath(file_path, self.project_dir.get())
+                cmd = f"node --check \"{file_path}\""
+                
+                try:
+                    res = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=self.project_dir.get())
+                    if res.returncode == 0:
+                        self.log_to_widget(self.check_output, f"✓ [PASSED] {rel_path}\n")
+                    else:
+                        self.log_to_widget(self.check_output, f"✗ [FAILED] {rel_path}\n{res.stderr}\n")
+                except Exception as e:
+                    self.log_to_widget(self.check_output, f"[ERROR] Could not check {rel_path}: {e}\n")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def toggle_watcher(self):
+        if self.watch_enabled.get():
+            self.watcher_running = True
+            self.watcher_thread = threading.Thread(target=self.file_watcher_loop, daemon=True)
+            self.watcher_thread.start()
+            self.log_to_widget(self.check_output, "\n[Watcher] Started monitoring /src for modifications...\n")
+        else:
+            self.watcher_running = False
+            self.log_to_widget(self.check_output, "\n[Watcher] Stopped monitoring.\n")
+
+    def file_watcher_loop(self):
+        files = self.get_src_files()
+        self.file_mtimes = {f: os.path.getmtime(f) for f in files if os.path.exists(f)}
+
+        while self.watcher_running:
+            time.sleep(1)
+            current_files = self.get_src_files()
+            modified_files = []
+
+            for f in current_files:
+                if os.path.exists(f):
+                    mtime = os.path.getmtime(f)
+                    if f not in self.file_mtimes or self.file_mtimes[f] < mtime:
+                        self.file_mtimes[f] = mtime
+                        modified_files.append(f)
+
+            if modified_files and self.watcher_running:
+                if self.debounce_timer:
+                    self.debounce_timer.cancel()
+                self.debounce_timer = threading.Timer(0.5, self.run_node_check, args=(modified_files,))
+                self.debounce_timer.start()
+
+    # --------------------------------------------------------
+    # TAB 6: UPDATE
+    # --------------------------------------------------------
+    def setup_update_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Update")
+
+        btn_frame = ttk.Frame(tab, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        check_cli_btn = ttk.Button(btn_frame, text="Check @tauri-apps/cli", command=self.check_tauri_cli)
+        check_cli_btn.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
+
+        update_cli_btn = ttk.Button(btn_frame, text="Update Tauri CLI & API", command=self.update_tauri_cli)
+        update_cli_btn.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
+
+        output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.update_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
+        self.update_output.pack(fill=tk.BOTH, expand=True)
+        self.update_output.configure(state='disabled')
+
+    def check_tauri_cli(self):
+        command = f"{self.package_manager} outdated @tauri-apps/cli"
+        self.log_to_widget(self.update_output, f"\n> Executing: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.update_output), daemon=True).start()
+
+    def update_tauri_cli(self):
+        command = f"{self.package_manager} update @tauri-apps/cli @tauri-apps/api --latest"
+        self.log_to_widget(self.update_output, f"\n> Executing: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.update_output), daemon=True).start()
 
     # --------------------------------------------------------
     # LOGIC & UTILITIES
@@ -147,7 +362,6 @@ class TauriManagerApp:
         if not os.path.exists(path):
             return
 
-        # 1. Detect Package Manager
         if os.path.exists(os.path.join(path, "pnpm-lock.yaml")):
             self.package_manager = "pnpm"
         elif os.path.exists(os.path.join(path, "package-lock.json")):
@@ -157,50 +371,94 @@ class TauriManagerApp:
         elif os.path.exists(os.path.join(path, "bun.lockb")) or os.path.exists(os.path.join(path, "bun.lock")):
             self.package_manager = "bun"
         else:
-            self.package_manager = "pnpm" # Default fall-back
+            self.package_manager = "pnpm"
 
         self.info_label.config(text=f"Package Manager Detected: {self.package_manager}")
         
-        # 2. Update downstream fields
         self.scan_installed_plugins()
         self.load_config_file()
 
+        if self.watch_enabled.get():
+            files = self.get_src_files()
+            self.file_mtimes = {f: os.path.getmtime(f) for f in files if os.path.exists(f)}
+
+    def fetch_latest_version_from_npm(self, pkg_name):
+        """Fetch latest version of an npm package using standard HTTP requests."""
+        try:
+            url = f"https://registry.npmjs.org/{pkg_name}/latest"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=3) as response:
+                data = json.loads(response.read().decode())
+                return data.get("version", "Unknown")
+        except Exception:
+            return "Unavailable"
+
     def scan_installed_plugins(self):
-        self.plugins_listbox.delete(0, tk.END)
+        for item in self.plugins_tree.get_children():
+            self.plugins_tree.delete(item)
+
         path = self.project_dir.get()
-        found_plugins = set()
+        found_plugins = {}
 
-        # Parse Cargo.toml for standard tauri-plugins
-        cargo_path = os.path.join(path, "src-tauri", "Cargo.toml")
-        if os.path.exists(cargo_path):
-            try:
-                with open(cargo_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    # Find dependencies matching tauri-plugin-xxxxx
-                    matches = re.findall(r'tauri-plugin-([\w-]+)', content)
-                    for match in matches:
-                        found_plugins.add(match)
-            except Exception as e:
-                self.log_to_widget(self.plugins_output, f"[Error Reading Cargo.toml]: {e}\n")
-
-        # Parse package.json for web-side packages
+        # 1. Parse package.json for exact version constraints
         pkg_json_path = os.path.join(path, "package.json")
         if os.path.exists(pkg_json_path):
             try:
                 with open(pkg_json_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                    for key in deps.keys():
+                    for key, val in deps.items():
                         if key.startswith("@tauri-apps/plugin-"):
-                            found_plugins.add(key.replace("@tauri-apps/plugin-", ""))
+                            name = key.replace("@tauri-apps/plugin-", "")
+                            found_plugins[name] = {"full_name": key, "version": val}
             except Exception as e:
                 self.log_to_widget(self.plugins_output, f"[Error Reading package.json]: {e}\n")
 
-        if found_plugins:
-            for plugin in sorted(found_plugins):
-                self.plugins_listbox.insert(tk.END, f"🔌 {plugin}")
-        else:
-            self.plugins_listbox.insert(tk.END, "No plugins detected.")
+        # 2. Parse Cargo.toml as fallback/supplement
+        cargo_path = os.path.join(path, "src-tauri", "Cargo.toml")
+        if os.path.exists(cargo_path):
+            try:
+                with open(cargo_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    matches = re.findall(r'tauri-plugin-([\w-]+)\s*=\s*"([^"]+)"', content)
+                    for name, ver in matches:
+                        if name not in found_plugins:
+                            found_plugins[name] = {"full_name": f"@tauri-apps/plugin-{name}", "version": ver}
+            except Exception as e:
+                self.log_to_widget(self.plugins_output, f"[Error Reading Cargo.toml]: {e}\n")
+
+        if not found_plugins:
+            self.plugins_tree.insert("", tk.END, values=("No plugins detected", "-", "-"))
+            return
+
+        def fetch_versions_task():
+            for name, details in sorted(found_plugins.items()):
+                latest_ver = self.fetch_latest_version_from_npm(details["full_name"])
+                
+                # Update UI safely
+                self.root.after(0, lambda n=name, c=details['version'], l=latest_ver: 
+                    self.plugins_tree.insert("", tk.END, values=(f"🔌 {n}", c, l))
+                )
+
+        threading.Thread(target=fetch_versions_task, daemon=True).start()
+
+    def update_selected_plugin(self):
+        selected = self.plugins_tree.selection()
+        if not selected:
+            messagebox.showwarning("Warning", "Please select a plugin from the list to update.")
+            return
+
+        item = self.plugins_tree.item(selected[0])
+        plugin_display_name = item["values"][0].replace("🔌 ", "").strip()
+
+        if plugin_display_name == "No plugins detected":
+            return
+
+        pkg_full_name = f"@tauri-apps/plugin-{plugin_display_name}"
+        command = f"{self.package_manager} update {pkg_full_name} --latest"
+
+        self.log_to_widget(self.plugins_output, f"\n> Updating Plugin: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.plugins_output, self.scan_installed_plugins), daemon=True).start()
 
     def install_plugin(self):
         plugin_name = self.plugin_name_entry.get().strip()
@@ -208,14 +466,62 @@ class TauriManagerApp:
             messagebox.showwarning("Warning", "Please enter a valid plugin name.")
             return
 
-        # Handle formatting formatting standard syntax variants seamlessly
         plugin_name = plugin_name.replace("tauri-plugin-", "").replace("@tauri-apps/plugin-", "")
-        
-        # Formulate exact instruction string required
         command = f"{self.package_manager} tauri add {plugin_name}"
         
         self.log_to_widget(self.plugins_output, f"\n> Executing: {command}\n")
         threading.Thread(target=self.execute_shell_cmd, args=(command, self.plugins_output, self.scan_installed_plugins), daemon=True).start()
+
+    def launch_tauri_dev(self):
+        run_cmd = "run " if self.package_manager in ["npm", "pnpm"] else ""
+        dev_command = f"{self.package_manager} {run_cmd}tauri dev"
+
+        # Windows-specific prompt for shell window selection
+        if platform.system() == "Windows":
+            shell_choice = self.ask_windows_shell()
+            if not shell_choice:
+                return  # Cancelled
+
+            if shell_choice == "cmd":
+                # Start new cmd window
+                cmd_exec = f'start cmd /k "cd /d "{self.project_dir.get()}" && {dev_command}"'
+            else:
+                # Start new powershell window
+                cmd_exec = f'start powershell -NoExit -Command "cd \'{self.project_dir.get()}\'; {dev_command}"'
+
+            subprocess.Popen(cmd_exec, shell=True)
+        else:
+            # Unix-like platforms
+            subprocess.Popen(dev_command, shell=True, cwd=self.project_dir.get())
+
+    def ask_windows_shell(self):
+        """Custom popup dialog for choosing Windows terminal shell."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Shell Environment")
+        dialog.geometry("320x130")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        choice = tk.StringVar(value=None)
+
+        ttk.Label(dialog, text="Select terminal to launch Tauri Dev server:").pack(pady=10)
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(pady=10)
+
+        def select(val):
+            choice.set(val)
+            dialog.destroy()
+
+        cmd_btn = ttk.Button(btn_frame, text="Command Prompt (cmd)", command=lambda: select("cmd"))
+        cmd_btn.pack(side=tk.LEFT, padx=5)
+
+        ps_btn = ttk.Button(btn_frame, text="PowerShell", command=lambda: select("powershell"))
+        ps_btn.pack(side=tk.LEFT, padx=5)
+
+        self.root.wait_window(dialog)
+        return choice.get()
 
     def load_config_file(self):
         config_path = os.path.join(self.project_dir.get(), "src-tauri", "tauri.conf.json")
@@ -238,7 +544,6 @@ class TauriManagerApp:
             
         raw_content = self.config_editor.get("1.0", tk.END).strip()
         
-        # Optional: Basic JSON syntax check prior to saving
         try:
             json.loads(raw_content)
         except json.JSONDecodeError as err:
@@ -253,7 +558,6 @@ class TauriManagerApp:
             messagebox.showerror("Error", f"Failed saving alterations to target configuration system:\n{e}")
 
     def run_cargo_command(self, command):
-        # Target directory explicitly paths to /src-tauri when triggering Cargo actions
         cargo_working_dir = os.path.join(self.project_dir.get(), "src-tauri")
         
         if not os.path.exists(cargo_working_dir):
@@ -267,7 +571,6 @@ class TauriManagerApp:
     # THREAD-SAFE ASYNC SHELL INTERFACING
     # --------------------------------------------------------
     def log_to_widget(self, widget, text):
-        """Safely updates Tkinter UI elements from arbitrary threading tasks."""
         def append():
             widget.configure(state='normal')
             widget.insert(tk.END, text)
@@ -279,7 +582,6 @@ class TauriManagerApp:
         cwd = alternative_cwd if alternative_cwd else self.project_dir.get()
         
         try:
-            # shell=True ensures shell configuration variables/executables resolution matches terminal expectations
             process = subprocess.Popen(
                 command,
                 shell=True,
@@ -290,7 +592,6 @@ class TauriManagerApp:
                 bufsize=1
             )
 
-            # Stream pipe output line-by-line while operational
             while True:
                 line = process.stdout.readline()
                 if not line and process.poll() is not None:

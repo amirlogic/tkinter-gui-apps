@@ -45,6 +45,8 @@ Python GUI Apps made using Tkinter
 
 `textweb.py`  Get Text Only version of a Website (requires bs4)
 
+`image_cropper.py`  Crop image to some post sizes (requires Pillow v9+)
+
 
 ## Usage
 

@@ -62,6 +62,7 @@ class TauriManagerApp:
         self.setup_icons_tab()
         self.setup_check_tab()
         self.setup_update_tab()
+        self.setup_tests_tab()
 
     # --------------------------------------------------------
     # TAB 1: PLUGINS
@@ -349,6 +350,31 @@ class TauriManagerApp:
         threading.Thread(target=self.execute_shell_cmd, args=(command, self.update_output), daemon=True).start()
 
     # --------------------------------------------------------
+    # TAB 7: TESTS
+    # --------------------------------------------------------
+    def setup_tests_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Tests")
+
+        btn_frame = ttk.Frame(tab, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        run_tests_btn = ttk.Button(btn_frame, text="Run Tests", command=self.run_tests)
+        run_tests_btn.pack(side=tk.LEFT, padx=10, pady=5)
+
+        output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.tests_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
+        self.tests_output.pack(fill=tk.BOTH, expand=True)
+        self.tests_output.configure(state='disabled')
+
+    def run_tests(self):
+        command = f"{self.package_manager} test"
+        self.log_to_widget(self.tests_output, f"\n> Executing: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.tests_output), daemon=True).start()
+
+    # --------------------------------------------------------
     # LOGIC & UTILITIES
     # --------------------------------------------------------
     def browse_directory(self):
@@ -383,7 +409,6 @@ class TauriManagerApp:
             self.file_mtimes = {f: os.path.getmtime(f) for f in files if os.path.exists(f)}
 
     def fetch_latest_version_from_npm(self, pkg_name):
-        """Fetch latest version of an npm package using standard HTTP requests."""
         try:
             url = f"https://registry.npmjs.org/{pkg_name}/latest"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -400,7 +425,6 @@ class TauriManagerApp:
         path = self.project_dir.get()
         found_plugins = {}
 
-        # 1. Parse package.json for exact version constraints
         pkg_json_path = os.path.join(path, "package.json")
         if os.path.exists(pkg_json_path):
             try:
@@ -414,7 +438,6 @@ class TauriManagerApp:
             except Exception as e:
                 self.log_to_widget(self.plugins_output, f"[Error Reading package.json]: {e}\n")
 
-        # 2. Parse Cargo.toml as fallback/supplement
         cargo_path = os.path.join(path, "src-tauri", "Cargo.toml")
         if os.path.exists(cargo_path):
             try:
@@ -435,7 +458,6 @@ class TauriManagerApp:
             for name, details in sorted(found_plugins.items()):
                 latest_ver = self.fetch_latest_version_from_npm(details["full_name"])
                 
-                # Update UI safely
                 self.root.after(0, lambda n=name, c=details['version'], l=latest_ver: 
                     self.plugins_tree.insert("", tk.END, values=(f"🔌 {n}", c, l))
                 )
@@ -474,28 +496,23 @@ class TauriManagerApp:
 
     def launch_tauri_dev(self):
         run_cmd = "run " if self.package_manager in ["npm", "pnpm"] else ""
-        dev_command = f"{self.package_manager} {run_cmd}tauri dev"
+        dev_command = f"{self.package_manager} {run_cmd}tauri dev -- --verbose"
 
-        # Windows-specific prompt for shell window selection
         if platform.system() == "Windows":
             shell_choice = self.ask_windows_shell()
             if not shell_choice:
-                return  # Cancelled
+                return
 
             if shell_choice == "cmd":
-                # Start new cmd window
                 cmd_exec = f'start cmd /k "cd /d "{self.project_dir.get()}" && {dev_command}"'
             else:
-                # Start new powershell window
                 cmd_exec = f'start powershell -NoExit -Command "cd \'{self.project_dir.get()}\'; {dev_command}"'
 
             subprocess.Popen(cmd_exec, shell=True)
         else:
-            # Unix-like platforms
             subprocess.Popen(dev_command, shell=True, cwd=self.project_dir.get())
 
     def ask_windows_shell(self):
-        """Custom popup dialog for choosing Windows terminal shell."""
         dialog = tk.Toplevel(self.root)
         dialog.title("Select Shell Environment")
         dialog.geometry("320x130")
@@ -581,6 +598,19 @@ class TauriManagerApp:
     def execute_shell_cmd(self, command, output_widget, on_complete_callback=None, alternative_cwd=None):
         cwd = alternative_cwd if alternative_cwd else self.project_dir.get()
         
+        # Prepare environment variables to disable ANSI formatting
+        env = os.environ.copy()
+        env["FORCE_COLOR"] = "0"
+        env["NO_COLOR"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+
+        # Regex pattern to match ANSI escape sequences
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+        # Prefix Windows commands with chcp 65001 to ensure UTF-8 output
+        if platform.system() == "Windows":
+            command = f"chcp 65001 >nul && {command}"
+
         try:
             process = subprocess.Popen(
                 command,
@@ -589,7 +619,10 @@ class TauriManagerApp:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                env=env
             )
 
             while True:
@@ -597,7 +630,9 @@ class TauriManagerApp:
                 if not line and process.poll() is not None:
                     break
                 if line:
-                    self.log_to_widget(output_widget, line)
+                    # Strip ANSI escape codes before outputting to Tkinter
+                    clean_line = ansi_escape.sub('', line)
+                    self.log_to_widget(output_widget, clean_line)
             
             return_code = process.poll()
             self.log_to_widget(output_widget, f"\n[Process concluded with return code: {return_code}]\n")

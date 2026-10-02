@@ -47,6 +47,8 @@ Python GUI Apps made using Tkinter
 
 `image_cropper.py`  Crop image to some post sizes (requires Pillow v9+)
 
+`animgif.py`  Make animated Gif from a set of images
+
 
 ## Usage
 

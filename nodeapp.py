@@ -11,13 +11,13 @@ class NodeManagerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Node App Task Manager")
-        self.root.geometry("650x570")
-        self.root.minsize(550, 450)
+        self.root.geometry("780x570")
+        self.root.minsize(650, 450)
 
         self.current_dir = ""
         self.package_manager = "npm"
         self.scripts = {}
-        self.active_process = None  # Reference to track the current running process
+        self.active_process = None  # Reference to track the internal running process
 
         self.create_widgets()
 
@@ -62,7 +62,7 @@ class NodeManagerApp:
         main_frame = ttk.LabelFrame(self.root, text="Scripts & Actions", padding=10)
         main_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Action bar (Install, Run, Stop buttons)
+        # Action bar (Install, Run, Run External, Stop buttons)
         actions_frame = ttk.Frame(main_frame)
         actions_frame.pack(fill="x", pady=(0, 5))
 
@@ -81,6 +81,14 @@ class NodeManagerApp:
             state="disabled"
         )
         self.btn_run.pack(side="left", padx=(0, 5))
+
+        self.btn_run_external = ttk.Button(
+            actions_frame, 
+            text="Run in External Shell", 
+            command=self.run_script_external, 
+            state="disabled"
+        )
+        self.btn_run_external.pack(side="left", padx=(0, 5))
 
         self.btn_stop = ttk.Button(
             actions_frame, 
@@ -145,6 +153,7 @@ class NodeManagerApp:
             self.pm_label.config(text="Package Manager: N/A")
             self.btn_install.config(state="disabled")
             self.btn_run.config(state="disabled")
+            self.btn_run_external.config(state="disabled")
             self.btn_stop.config(state="disabled")
             return
 
@@ -173,33 +182,57 @@ class NodeManagerApp:
 
         if self.scripts:
             self.btn_run.config(state="normal")
+            self.btn_run_external.config(state="normal")
+
+    def get_selected_command(self):
+        """Helper to retrieve full command based on package manager and list selection."""
+        selection = self.script_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a script to run.")
+            return None
+
+        script_key = list(self.scripts.keys())[selection[0]]
+        
+        if self.package_manager in ["npm", "pnpm"]:
+            return f"{self.package_manager} run {script_key}"
+        else:
+            return f"{self.package_manager} {script_key}"
 
     def run_install(self):
         cmd = f"{self.package_manager} install"
         self.execute_command(cmd)
 
     def run_script(self):
-        selection = self.script_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a script to run.")
+        cmd = self.get_selected_command()
+        if cmd:
+            self.execute_command(cmd)
+
+    def run_script_external(self):
+        cmd = self.get_selected_command()
+        if not cmd:
             return
 
-        script_key = list(self.scripts.keys())[selection[0]]
-        
-        # Build command depending on the package manager
-        if self.package_manager in ["npm", "pnpm"]:
-            cmd = f"{self.package_manager} run {script_key}"
-        else:
-            cmd = f"{self.package_manager} {script_key}"
+        self.log_output(f"> Launching external shell: {cmd}\n")
 
-        self.execute_command(cmd)
+        if platform.system() == "Windows":
+            selected_shell = self.shell_var.get() if self.shell_var else "powershell"
+            if selected_shell == "powershell":
+                # Opens a new PowerShell window, keeps it open (-NoExit) after script completes
+                args = f'start powershell.exe -NoExit -Command "{cmd}"'
+            else:
+                # Opens a new CMD window, keeps it open (/k) after script completes
+                args = f'start cmd.exe /k "{cmd}"'
+            subprocess.Popen(args, cwd=self.current_dir, shell=True)
+        elif platform.system() == "Darwin":  # macOS
+            subprocess.Popen(['open', '-a', 'Terminal', '.'], cwd=self.current_dir)
+        else:  # Linux
+            subprocess.Popen(['x-terminal-emulator', '-e', f'bash -c "{cmd}; exec bash"'], cwd=self.current_dir)
 
     def stop_command(self):
         if self.active_process and self.active_process.poll() is None:
             self.log_output("\n> Stopping process...\n")
             try:
                 if platform.system() == "Windows":
-                    # Kills process tree (/T) forcefully (/F) by PID on Windows
                     subprocess.run(
                         f"taskkill /F /T /PID {self.active_process.pid}",
                         shell=True,

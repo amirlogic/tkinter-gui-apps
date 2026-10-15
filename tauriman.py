@@ -63,6 +63,7 @@ class TauriManagerApp:
         self.setup_check_tab()
         self.setup_update_tab()
         self.setup_tests_tab()
+        self.setup_build_tab()
 
     # --------------------------------------------------------
     # TAB 1: PLUGINS
@@ -370,9 +371,35 @@ class TauriManagerApp:
         self.tests_output.configure(state='disabled')
 
     def run_tests(self):
-        command = f"{self.package_manager} test"
+        command = f"{self.package_manager} test -- --no-color"
         self.log_to_widget(self.tests_output, f"\n> Executing: {command}\n")
         threading.Thread(target=self.execute_shell_cmd, args=(command, self.tests_output), daemon=True).start()
+
+    # --------------------------------------------------------
+    # TAB 8: BUILD
+    # --------------------------------------------------------
+    def setup_build_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Build")
+
+        btn_frame = ttk.Frame(tab, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        build_btn = ttk.Button(btn_frame, text="📦 Build App (tauri build)", command=self.run_build)
+        build_btn.pack(side=tk.LEFT, padx=10, pady=5)
+
+        output_frame = ttk.LabelFrame(tab, text="Terminal Output", padding=5)
+        output_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.build_output = scrolledtext.ScrolledText(output_frame, bg="black", fg="white", insertbackground="white", font=("Courier", 10))
+        self.build_output.pack(fill=tk.BOTH, expand=True)
+        self.build_output.configure(state='disabled')
+
+    def run_build(self):
+        run_cmd = "run " if self.package_manager in ["npm", "pnpm"] else ""
+        command = f"{self.package_manager} {run_cmd}tauri build"
+        self.log_to_widget(self.build_output, f"\n> Executing: {command}\n")
+        threading.Thread(target=self.execute_shell_cmd, args=(command, self.build_output), daemon=True).start()
 
     # --------------------------------------------------------
     # LOGIC & UTILITIES
@@ -496,7 +523,7 @@ class TauriManagerApp:
 
     def launch_tauri_dev(self):
         run_cmd = "run " if self.package_manager in ["npm", "pnpm"] else ""
-        dev_command = f"{self.package_manager} {run_cmd}tauri dev -- --verbose"
+        dev_command = f"{self.package_manager} {run_cmd}tauri dev"
 
         if platform.system() == "Windows":
             shell_choice = self.ask_windows_shell()
@@ -598,16 +625,13 @@ class TauriManagerApp:
     def execute_shell_cmd(self, command, output_widget, on_complete_callback=None, alternative_cwd=None):
         cwd = alternative_cwd if alternative_cwd else self.project_dir.get()
         
-        # Prepare environment variables to disable ANSI formatting
         env = os.environ.copy()
         env["FORCE_COLOR"] = "0"
         env["NO_COLOR"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
 
-        # Regex pattern to match ANSI escape sequences
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-        # Prefix Windows commands with chcp 65001 to ensure UTF-8 output
         if platform.system() == "Windows":
             command = f"chcp 65001 >nul && {command}"
 
@@ -630,7 +654,6 @@ class TauriManagerApp:
                 if not line and process.poll() is not None:
                     break
                 if line:
-                    # Strip ANSI escape codes before outputting to Tkinter
                     clean_line = ansi_escape.sub('', line)
                     self.log_to_widget(output_widget, clean_line)
             

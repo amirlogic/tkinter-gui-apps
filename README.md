@@ -52,6 +52,8 @@ Python GUI Apps made using Tkinter
 
 `textweb.py`  Get Text Only version of a Website (requires bs4)
 
+`monorepo.py` Manage monorepo electron apps (pnpm)
+
 
 ## Usage
 

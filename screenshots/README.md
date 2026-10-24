@@ -13,3 +13,8 @@
 `tauri_plugin_sync.py`
 
 ![tauri_plugin_sync.PNG](./tauri_plugin_sync.PNG)
+
+
+`monorepo.py`
+
+![Monorepo](./monorepo.PNG)

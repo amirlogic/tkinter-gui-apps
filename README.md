@@ -24,6 +24,8 @@ Python GUI Apps made using Tkinter
 
 `videoscene.py` Detect and List Scenes in a Video (requires FFMPEG)
 
+`scene_detector_gui.py`  Scene Change Detector with Thumbnails
+
 
 ## Windows
 

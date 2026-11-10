@@ -47,6 +47,10 @@ Python GUI Apps made using Tkinter
 
 `animgif.py`  Make animated Gif from a set of images
 
+`ythumbnail.py`  Make Youtube Thumbnails using SVG images
+
+`ythumbnailx.py`  Improved version, requires additional libs
+
 
 ## Misc
 
